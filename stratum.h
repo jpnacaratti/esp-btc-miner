@@ -2,8 +2,19 @@
 #define STRATUM_H
 
 #include "models/Worker.h"
+#include "enums/StratumMethod.h"
 
 bool stratumSubscribe(WiFiClient& client, Worker& worker);
-bool parseMiningSubscribe(String line, Worker& worker);
+bool stratumParseSubscribe(String& line, Worker& worker);
+
+bool stratumConfigure(WiFiClient& client, Worker& worker);
+bool stratumParseConfigure(String& line, Worker& worker);
+
+bool stratumAuthorize(WiFiClient& client, const char *user, const char *pass);
+bool stratumParseAuthorize(String& line);
+
+bool stratumSuggestDifficulty(WiFiClient& client, double suggestedDifficulty);
+
+StratumMethod stratumParseMethod(String& line); 
 
 #endif

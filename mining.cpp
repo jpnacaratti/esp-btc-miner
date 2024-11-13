@@ -1,11 +1,14 @@
+#include "freertos/portmacro.h"
 #include <Arduino.h>
 #include <WiFi.h>
 
 #include "mining.h"
 #include "stratum.h"
 #include "models/Worker.h"
+#include "enums/StratumMethod.h"
 
 static WiFiClient client;
+unsigned long mLastCommunication = millis();
 
 bool checkPoolConnection(Worker& worker, const char* pool_address, const uint16_t pool_port) {
 
@@ -33,13 +36,17 @@ bool checkPoolConnection(Worker& worker, const char* pool_address, const uint16_
   return true;
 }
 
+bool checkPoolInactivity(unsigned long lastSocketSent, unsigned int silenceLimit) {
+  return millis() - lastSocketSent > silenceLimit;
+}
+
 void startStratum(Worker& worker, const char* pool_address, const uint16_t pool_port, float suggestDifficulty) {
   
   double currentDifficulty = suggestDifficulty;
 
   Serial.println("Starting stratum...");
 
-  while(true) {
+  while (true) {
 
     if (WiFi.status() != WL_CONNECTED) {
 
@@ -65,7 +72,53 @@ void startStratum(Worker& worker, const char* pool_address, const uint16_t pool_
         continue;
       }
 
+      stratumConfigure(client, worker);
+
+      if (!stratumAuthorize(client, worker.workerName.c_str(), worker.workerPass.c_str())) {
+        client.stop();
+        continue;
+      }
+
+      stratumSuggestDifficulty(client, suggestDifficulty);
+
+      worker.subscribed = true;
+      mLastCommunication = millis();
     }
 
+    if (checkPoolInactivity(mLastCommunication, COMMUNICATION_SILENCE_LIMIT)) {
+      Serial.println("Sending keep alive socket...")
+      stratumSuggestDifficulty(client, suggestDifficulty);
+      mLastCommunication = millis();
+    }
+
+    while (client.connected() && client.available()) {
+      
+      String line = client.readStringUntil('\n');
+      StratumMethod method = stratumParseMethod(line);
+      switch (method) {
+        case STRATUM_PARSE_ERROR: {
+          Serial.println("Error when parsing JSON");
+          break;
+        }
+        case MINING_NOTIFY: {
+
+          break;
+        }
+        case MINING_SET_DIFFICULTY: {
+
+          break;
+        }
+        case STRATUM_SUCCESS: {
+          Serial.println("Success when submiting")
+          break;
+        }
+        default: {
+          Serial.println("Unknown JSON received")
+          break;
+        }
+      }
+    }
+
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }

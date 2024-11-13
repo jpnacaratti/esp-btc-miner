@@ -1,10 +1,10 @@
 #include "utils.h"
 
 bool verifyPayload (String* line){
-  if (line -> length() == 0) return false;
+  if (line->length() == 0) return false;
   
-  line -> trim();
-  if (line -> isEmpty()) return false;
+  line->trim();
+  if (line->isEmpty()) return false;
 
   return true;
 }

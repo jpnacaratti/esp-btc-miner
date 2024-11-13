@@ -2,9 +2,10 @@
 
 #include "mining.h"
 #include "models/Worker.h"
+#include "models/StartStratumParams.h"
 
-constexpr char WIFI_SSID[] = "Familia Maia";
-constexpr char WIFI_PASSWORD[] = "26730008";
+constexpr char WIFI_SSID[] = "John P";
+constexpr char WIFI_PASSWORD[] = "1234567a";
 
 constexpr char SOFTWARE_VERSION[] = "Miiner/1.0.0";
 
@@ -20,18 +21,52 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
+  WiFi.disconnect();
+  delay(1000);
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  int retryCount = 0;
+  while (WiFi.status() != WL_CONNECTED && retryCount < 60) {
+    delay(1000);
+    Serial.print(".");
+    retryCount++;
+  }
+
+  Serial.printf("ESP32 IP assigned: %s\n", WiFi.localIP().toString().c_str());
 
   Worker worker;
 
   worker.workerName = String(BTC_ADDRESS) + "." + WORKER_NAME;
+  worker.workerPass = String(POOL_PASSWORD);
 
-  startStratum(worker, POOL_HOST, POOL_PORT, SUGGESTED_DIFFICULTY);
+  worker.softwareVersion = String(SOFTWARE_VERSION);
+
+  // Creating new pointer to pass as a param in xTask
+  StartStratumParams* stratumParams = new StartStratumParams;
+  stratumParams->worker = &worker;
+  stratumParams->poolAddress = POOL_HOST;
+  stratumParams->poolPort = POOL_PORT;
+  stratumParams->suggestDifficulty = SUGGESTED_DIFFICULTY;
+
+  xTaskCreate(
+    startStratumTask,
+    "Stratum",
+    15000,
+    stratumParams,
+    1,
+    NULL
+  );
 
   Serial.println("Finished setup!");
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+}
 
+void startStratumTask(void* pvParameters) {
+  StartStratumParams* params = (StartStratumParams*) pvParameters;
+
+  startStratum(*params->worker, params->poolAddress, params->poolPort, params->suggestDifficulty);
 }

@@ -1,0 +1,12 @@
+#ifndef STRATUM_METHOD_H
+#define STRATUM_METHOD_H
+
+typedef enum {
+  STRATUM_PARSE_ERROR,
+  MINING_NOTIFY,
+  MINING_SET_DIFFICULTY,
+  STRATUM_SUCCESS,
+  STRATUM_UNKNOWN
+} StratumMethod;
+
+#endif
