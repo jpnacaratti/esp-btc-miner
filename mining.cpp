@@ -86,7 +86,7 @@ void startStratum(Worker& worker, const char* pool_address, const uint16_t pool_
     }
 
     if (checkPoolInactivity(mLastCommunication, COMMUNICATION_SILENCE_LIMIT)) {
-      Serial.println("Sending keep alive socket...")
+      Serial.println("Sending keep alive socket...");
       stratumSuggestDifficulty(client, suggestDifficulty);
       mLastCommunication = millis();
     }
@@ -95,25 +95,34 @@ void startStratum(Worker& worker, const char* pool_address, const uint16_t pool_
       
       String line = client.readStringUntil('\n');
       StratumMethod method = stratumParseMethod(line);
+      mLastCommunication = millis();
       switch (method) {
         case STRATUM_PARSE_ERROR: {
           Serial.println("Error when parsing JSON");
           break;
         }
         case MINING_NOTIFY: {
+          if (stratumParseNotify(line, worker.miner.job)) {
 
+            worker.templates++;
+
+            worker.miner.mining = false;
+
+            worker.extranonce2 = "";
+
+          }
           break;
         }
         case MINING_SET_DIFFICULTY: {
-
+          stratumParseDifficulty(line, worker);
           break;
         }
         case STRATUM_SUCCESS: {
-          Serial.println("Success when submiting")
+          Serial.println("Success when submiting");
           break;
         }
         default: {
-          Serial.println("Unknown JSON received")
+          Serial.println("Unknown JSON received");
           break;
         }
       }

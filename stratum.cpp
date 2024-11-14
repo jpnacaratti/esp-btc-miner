@@ -111,6 +111,58 @@ bool stratumSuggestDifficulty(WiFiClient& client, double suggestedDifficulty) {
   return client.print(payload);
 }
 
+bool stratumParseDifficulty(String& line, Worker& worker) {
+
+  Serial.println("Parsing method: SET_DIFFICULTY");
+
+  if (!verifyPayload(&line)) return false;
+
+  StaticJsonDocument<BUFFER_JSON_DOC> doc;
+
+  DeserializationError error = deserializeJson(doc, line);
+  if (error || !doc.containsKey("params")) return false;
+
+  double difficulty = (double) doc["params"][0];
+
+  Serial.printf("Received difficulty: %s\n", difficulty);
+
+  worker.poolDifficulty = difficulty;
+
+  return true;
+}
+
+bool stratumParseNotify(String& line, MineJob& job) {
+
+  Serial.println("Parsing method: SET_DIFFICULTY");
+
+  if (!verifyPayload(&line)) return false;
+
+  StaticJsonDocument<BUFFER_JSON_DOC> doc;
+
+  DeserializationError error = deserializeJson(doc, line);
+  if (error || !doc.containsKey("params")) return false;
+
+  job.jobId = String(doc["params"][0]);
+  job.prevBlockHash = String(doc["params"][1]);
+  job.coinb1 = String(doc["params"][2]);
+  job.coinb2 = String(doc["params"][3]);
+  job.merkleBranch = doc["params"][4];
+  job.version = String(doc["params"][5]);
+  job.nbits = String(doc["params"][6]);
+  job.ntime = String(doc["params"][7]);
+
+  Serial.print("    job_id: "); Serial.println(job.jobId);
+  Serial.print("    prevhash: "); Serial.println(job.prevBlockHash);
+  Serial.print("    coinb1: "); Serial.println(job.coinb1);
+  Serial.print("    coinb2: "); Serial.println(job.coinb2);
+  Serial.print("    merkle_branch size: "); Serial.println(job.merkleBranch.size());
+  Serial.print("    version: "); Serial.println(job.version);
+  Serial.print("    nbits: "); Serial.println(job.nbits);
+  Serial.print("    ntime: "); Serial.println(job.ntime);
+
+  return true;
+}
+
 StratumMethod stratumParseMethod(String& line) {
 
   Serial.printf("Message received from pool: %s\n", line.c_str());
@@ -130,10 +182,10 @@ StratumMethod stratumParseMethod(String& line) {
   StratumMethod toReturn = STRATUM_UNKNOWN;
 
   if (strcmp("mining.notify", (const char*) doc["method"]) == 0) {
-    result = MINING_NOTIFY;
+    toReturn = MINING_NOTIFY;
   } else if (strcmp("mining.set_difficulty", (const char*) doc["method"]) == 0) {
-    result = MINING_SET_DIFFICULTY;
+    toReturn = MINING_SET_DIFFICULTY;
   }
 
-  return result
+  return toReturn;
 }

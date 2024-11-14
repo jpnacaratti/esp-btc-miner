@@ -8,7 +8,7 @@ typedef struct {
   String prevBlockHash;
   String coinb1;
   String coinb2;
-  JsonArray merkle_branch;
+  JsonArray merkleBranch;
   String version;
   String nbits;
   String ntime;

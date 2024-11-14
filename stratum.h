@@ -14,6 +14,9 @@ bool stratumAuthorize(WiFiClient& client, const char *user, const char *pass);
 bool stratumParseAuthorize(String& line);
 
 bool stratumSuggestDifficulty(WiFiClient& client, double suggestedDifficulty);
+bool stratumParseDifficulty(String& line, Worker& worker);
+
+bool stratumParseNotify(String& line, MineJob& job);
 
 StratumMethod stratumParseMethod(String& line); 
 
