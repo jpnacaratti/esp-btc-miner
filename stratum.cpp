@@ -105,15 +105,13 @@ bool stratumParseAuthorize(String& line) {
 bool stratumSuggestDifficulty(WiFiClient& client, double suggestedDifficulty) {
   char payload[BUFFER] = {0};
 
-  sprintf(payload, "{\"id\": %d, \"method\": \"mining.suggest_difficulty\", \"params\": [%.7g]}\n", 3, suggestedDifficulty);
+  sprintf(payload, "{\"id\": %d, \"method\": \"mining.suggest_difficulty\", \"params\": [%.7g]}\n", 4, suggestedDifficulty);
     
   Serial.printf("Sending suggest difficulty request: %s\n", payload);
   return client.print(payload);
 }
 
 bool stratumParseDifficulty(String& line, Worker& worker) {
-
-  Serial.println("Parsing method: SET_DIFFICULTY");
 
   if (!verifyPayload(&line)) return false;
 
@@ -124,7 +122,7 @@ bool stratumParseDifficulty(String& line, Worker& worker) {
 
   double difficulty = (double) doc["params"][0];
 
-  Serial.printf("Received difficulty: %s\n", difficulty);
+  Serial.printf("Received difficulty: %.4f\n", difficulty);
 
   worker.poolDifficulty = difficulty;
 
@@ -133,7 +131,7 @@ bool stratumParseDifficulty(String& line, Worker& worker) {
 
 bool stratumParseNotify(String& line, MineJob& job) {
 
-  Serial.println("Parsing method: SET_DIFFICULTY");
+  Serial.println("Parsing method: NOTIFY");
 
   if (!verifyPayload(&line)) return false;
 
@@ -146,21 +144,38 @@ bool stratumParseNotify(String& line, MineJob& job) {
   job.prevBlockHash = String(doc["params"][1]);
   job.coinb1 = String(doc["params"][2]);
   job.coinb2 = String(doc["params"][3]);
-  job.merkleBranch = doc["params"][4];
+  
+  // Saving merkle branch in a separated buffer to save pointer when the method ends
+  JsonArray originalArray = doc["params"][4].as<JsonArray>();
+  job.merkleBranch = job.merkleBuffer.to<JsonArray>();
+  for (JsonVariant v : originalArray) {
+    job.merkleBranch.add(v);
+  }
+
   job.version = String(doc["params"][5]);
   job.nbits = String(doc["params"][6]);
   job.ntime = String(doc["params"][7]);
 
-  Serial.print("    job_id: "); Serial.println(job.jobId);
-  Serial.print("    prevhash: "); Serial.println(job.prevBlockHash);
-  Serial.print("    coinb1: "); Serial.println(job.coinb1);
-  Serial.print("    coinb2: "); Serial.println(job.coinb2);
-  Serial.print("    merkle_branch size: "); Serial.println(job.merkleBranch.size());
-  Serial.print("    version: "); Serial.println(job.version);
-  Serial.print("    nbits: "); Serial.println(job.nbits);
-  Serial.print("    ntime: "); Serial.println(job.ntime);
-
   return true;
+}
+
+bool stratumSubmit(WiFiClient& client, Worker& worker, unsigned long nonce) {
+  char payload[BUFFER] = {0};
+
+  MineJob& job = worker.miner.job;
+
+  sprintf(payload, "{\"id\": %u, \"method\": \"mining.submit\", \"params\": [\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"]}\n",
+    5,
+    worker.workerName.c_str(),
+    job.jobId.c_str(),
+    worker.extranonce2.c_str(),
+    job.ntime.c_str(),
+    String(nonce, HEX).c_str(),
+    worker.versionMask.c_str()
+  );
+
+  Serial.printf("Sending mine job submit request: %s\n", payload);
+  return client.print(payload);
 }
 
 StratumMethod stratumParseMethod(String& line) {

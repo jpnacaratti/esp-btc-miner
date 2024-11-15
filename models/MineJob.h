@@ -8,6 +8,7 @@ typedef struct {
   String prevBlockHash;
   String coinb1;
   String coinb2;
+  StaticJsonDocument<512> merkleBuffer;
   JsonArray merkleBranch;
   String version;
   String nbits;

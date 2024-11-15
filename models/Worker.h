@@ -5,7 +5,7 @@
 
 typedef struct {
   IPAddress poolIP = IPAddress(1, 1, 1, 1); 
-  Miner miner;
+  Miner miner = {};
   String softwareVersion;
   String workerName;
   String workerPass;
@@ -16,6 +16,7 @@ typedef struct {
   int templates;
   bool subscribed;
   double poolDifficulty;
+  double bestDiff;
 } Worker;
 
 #endif

@@ -18,6 +18,8 @@ bool stratumParseDifficulty(String& line, Worker& worker);
 
 bool stratumParseNotify(String& line, MineJob& job);
 
+bool stratumSubmit(WiFiClient& client, Worker& worker, unsigned long nonce);
+
 StratumMethod stratumParseMethod(String& line); 
 
 #endif

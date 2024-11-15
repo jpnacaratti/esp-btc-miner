@@ -1,11 +1,14 @@
+#include <cstdio>
+#include <stdlib.h>
+#include <sys/_stdint.h>
 #include "mbedtls/sha256.h"
 
 #include "utils.h"
 #include "models/Worker.h"
 
-bool verifyPayload (String* line){
+bool verifyPayload(String* line){
   if (line->length() == 0) return false;
-  
+
   line->trim();
   if (line->isEmpty()) return false;
 
@@ -49,8 +52,24 @@ int toByteArray(const char *in, size_t in_size, uint8_t *out) {
   }
 }
 
+void getRandomExtranonce2ESP(int extranonce2Size, char *extranonce2) {
+  uint32_t extranonce2Number = esp_random();
+
+  uint8_t b0 = extranonce2Number & 0xFF;
+  uint8_t b1 = (extranonce2Number >> 8) & 0xFF;
+  uint8_t b2 = (extranonce2Number >> 16) & 0xFF;
+  uint8_t b3 = (extranonce2Number >> 24) & 0xFF;
+
+  char format[] = "%00x";
+
+  sprintf(&format[1], "%02dx", extranonce2Size * 2);
+  sprintf(extranonce2, format, extranonce2Number);
+}
+
 void getRandomExtranonce2(int extranonce2Size, char *extranonce2) {
   uint8_t b0, b1, b2, b3;
+
+  srand(millis());
 
   b0 = rand() % 256;
   b1 = rand() % 256;
@@ -93,6 +112,54 @@ void doubleSha256(const byte *input, size_t input_length, byte *output) {
   mbedtls_sha256_free(&ctx);
 }
 
+String applyVersionMask(const String& version, const String& versionMask) {
+
+  uint32_t version_int = strtoul(version.c_str(), NULL, 16);
+  uint32_t versionmask_int = strtoul(versionMask.c_str(), NULL, 16);
+
+  uint32_t new_version_int = version_int | versionmask_int;
+
+  char new_version_hex[9];
+  snprintf(new_version_hex, sizeof(new_version_hex), "%08x", new_version_int);
+
+  return String(new_version_hex);
+}
+
+void updateNonce(Miner& miner, uint32_t nonce) {
+  memcpy(&miner.bytearray_blockheader[76], &nonce, sizeof(nonce));
+}
+
+double le256todouble(const void *target) {
+
+	uint64_t *data64;
+	double dcut64;
+
+	data64 = (uint64_t *) (target + 24);
+	dcut64 = *data64 * 6277101735386680763835789423207666416102355444464034512896.0;
+
+	data64 = (uint64_t *) (target + 16);
+	dcut64 += *data64 * 340282366920938463463374607431768211456.0;
+
+	data64 = (uint64_t *) (target + 8);
+	dcut64 += *data64 * 18446744073709551616.0;
+
+	data64 = (uint64_t *) (target);
+	dcut64 += *data64;
+
+	return dcut64;
+}
+
+double diffFromTarget(void *target) {
+	double d64, dcut64;
+
+	d64 = TRUE_DIFF_ONE;
+	dcut64 = le256todouble(target);
+	
+  if (unlikely(!dcut64)) dcut64 = 1;
+
+	return d64 / dcut64;
+}
+
 void buildBlockHeader(Worker& worker) {
 
   Miner& miner = worker.miner;
@@ -107,8 +174,6 @@ void buildBlockHeader(Worker& worker) {
 
   target[TARGET_BUFFER_SIZE] = 0;
 
-  Serial.print("    target: "); Serial.println(target);
-
   size_t size_target = toByteArray(target, 32, miner.bytearray_target);
 
   for (size_t j = 0; j < 8; j++) {
@@ -122,25 +187,16 @@ void buildBlockHeader(Worker& worker) {
 
   worker.extranonce2.toCharArray(extranonce2Char, 2 * worker.extranonceSize + 1);
 
-  if (worker.extranonce2.isEmpty()) getRandomExtranonce2(worker.extranonceSize, extranonce2Char);
-  else getNextExtranonce2(worker.extranonceSize, extranonce2Char);
-
+  getNextExtranonce2(worker.extranonceSize, extranonce2Char);
   worker.extranonce2 = String(extranonce2Char);
-
-  Serial.print("    extranonce1: "); Serial.println(worker.extranonce1);
-  Serial.print("    extranonce2: "); Serial.println(worker.extranonce2);
 
   // Getting coinbase transaction
   String coinbase = job.coinb1 + worker.extranonce1 + worker.extranonce2 + job.coinb2;
   
-  Serial.print("    coinbase hex: "); Serial.println(coinbase);
-
   size_t str_len = coinbase.length() / 2;
   uint8_t bytearray[str_len];
 
   size_t res = toByteArray(coinbase.c_str(), str_len * 2, bytearray);
-
-  Serial.print("    coinbase bytes size: "); Serial.println(res);
 
   byte shaCoinbase[32];
   doubleSha256(bytearray, str_len, shaCoinbase); // Coinbase hash
@@ -162,5 +218,63 @@ void buildBlockHeader(Worker& worker) {
     doubleSha256(merkleConcatenated, sizeof(merkleConcatenated), miner.merkle_result);
   }
 
+  char merkle_root[65];
+  for (int i = 0; i < 32; i++) {
+    snprintf(&merkle_root[i*2], 3, "%02x", miner.merkle_result[i]);
+  }
+  merkle_root[65] = 0;
+
+  // Applying version mask and getting new version
+  String newVersionMasked = applyVersionMask(job.version, worker.versionMask);
+
+  // Blockheader in big endian
+  String blockheader = newVersionMasked + job.prevBlockHash + String(merkle_root) + job.ntime + job.nbits + "00000000";
+  str_len = blockheader.length() / 2;
+
+  res = toByteArray(blockheader.c_str(), str_len * 2, miner.bytearray_blockheader);
+
+  // Starting reversing header parts to little endian 
+  uint8_t buff;
+  size_t bword, bsize, boffset;
+
+  // Parsing version to little endian
+  boffset = 0;
+  bsize = 4;
+  for (size_t j = boffset; j < boffset + (bsize / 2); j++) {
+    buff = miner.bytearray_blockheader[j];
+    miner.bytearray_blockheader[j] = miner.bytearray_blockheader[2 * boffset + bsize - 1 - j];
+    miner.bytearray_blockheader[2 * boffset + bsize - 1 - j] = buff;
+  }
+
+  // Parsing previous block hash to little endian (swaping words of 4 bytes)
+  boffset = 4;
+  bword = 4;
+  bsize = 32;
+  for (size_t i = 1; i <= bsize / bword; i++) {
+    for (size_t j = boffset; j < boffset + bword / 2; j++) {
+      buff = miner.bytearray_blockheader[j];
+      miner.bytearray_blockheader[j] = miner.bytearray_blockheader[2 * boffset + bword - 1 - j];
+      miner.bytearray_blockheader[2 * boffset + bword - 1 - j] = buff;
+    }
+    boffset += bword;
+  }
+
+  // Parsing ntime to little endian
+  boffset = 68;
+  bsize = 4;
+  for (size_t j = boffset; j < boffset + (bsize / 2); j++) {
+    buff = miner.bytearray_blockheader[j];
+    miner.bytearray_blockheader[j] = miner.bytearray_blockheader[2 * boffset + bsize - 1 - j];
+    miner.bytearray_blockheader[2 * boffset + bsize - 1 - j] = buff;
+  }
+
+  // Parsing nbits to little endian
+  boffset = 72;
+  bsize = 4;
+  for (size_t j = boffset; j < boffset + (bsize / 2); j++) {
+    buff = miner.bytearray_blockheader[j];
+    miner.bytearray_blockheader[j] = miner.bytearray_blockheader[2 * boffset + bsize - 1 - j];
+    miner.bytearray_blockheader[2 * boffset + bsize - 1 - j] = buff;
+  }
 }
 
