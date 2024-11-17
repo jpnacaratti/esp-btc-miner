@@ -288,7 +288,7 @@ void startMonitor(Monitor& monitor) {
   uint16_t genericBackground = hexToRGB565(0x343B3D);
 
   // HashRate
-  updateText(sprite, 20, 123, 106, 35, "0", hrTextColor, hrBackground, POPPINS_40, TL_DATUM);
+  updateText(sprite, 19, 123, 115, 35, "0", hrTextColor, hrBackground, POPPINS_40, TL_DATUM);
 
   // Block templates
   updateText(sprite, 166, 20, 95, 17, "0", genericTextColor, genericBackground, POPPINS_18, TL_DATUM);
@@ -326,8 +326,8 @@ void startMonitor(Monitor& monitor) {
     }
 
     String hr = formatNumber(monitor.hashes, false, false);
-    if (!hr.equals(monitor.lastHashRate)) {
-      updateText(sprite, 20, 123, 113, 35, hr.c_str(), hrTextColor, hrBackground, POPPINS_40, TL_DATUM);
+    if (!hr.equals(monitor.lastHashRate) && hr.length() == 5) { // WA - TODO: Remove later
+      updateText(sprite, 19, 123, 115, 35, hr.c_str(), hrTextColor, hrBackground, POPPINS_40, TL_DATUM);
       monitor.lastHashRate = hr;
     }
 
