@@ -2,6 +2,7 @@
 
 #include "mining.h"
 #include "models/Worker.h"
+#include "models/Monitor.h"
 #include "models/StartStratumParams.h"
 #include "models/StartMinerParams.h"
 
@@ -19,10 +20,13 @@ constexpr char WORKER_NAME[] = "miinero";
 constexpr float SUGGESTED_DIFFICULTY = 0.0001f;
 
 Worker* worker = nullptr;
+Monitor* monitor = nullptr;
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  disableCore1WDT();
 
   WiFi.disconnect();
   delay(1000);
@@ -30,15 +34,27 @@ void setup() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   worker = new Worker{};
+  monitor = new Monitor{};
 
   worker->workerName = String(BTC_ADDRESS) + "." + WORKER_NAME;
   worker->workerPass = String(POOL_PASSWORD);
 
   worker->softwareVersion = String(SOFTWARE_VERSION);
 
+  Serial.println("Starting monitor task...");
+  xTaskCreate(
+    startMonitorTask,
+    "Monitor",
+    10000,
+    (void*) monitor,
+    4,
+    NULL
+  );
+
   // Creating new pointer to pass as a param in xTask
   StartStratumParams* stratumParams = new StartStratumParams;
   stratumParams->worker = worker;
+  stratumParams->monitor = monitor;
   stratumParams->poolAddress = POOL_HOST;
   stratumParams->poolPort = POOL_PORT;
   stratumParams->suggestDifficulty = SUGGESTED_DIFFICULTY;
@@ -56,6 +72,7 @@ void setup() {
   // Creating new pointer to pass as a param in xTaskPinned
   StartMinerParams* miner0Params = new StartMinerParams;
   miner0Params->worker = worker;
+  miner0Params->monitor = monitor;
   miner0Params->miner_id = 0;
 
   Serial.println("Starting miner 0 task...");
@@ -72,8 +89,9 @@ void setup() {
   // Creating new pointer to pass as a param in xTaskPinned
   StartMinerParams* miner1Params = new StartMinerParams;
   miner1Params->worker = worker;
+  miner1Params->monitor = monitor;
   miner1Params->miner_id = 1;
-
+  
   Serial.println("Starting miner 1 task...");
   xTaskCreatePinnedToCore(
     startMinerTask,
@@ -95,11 +113,17 @@ void loop() {
 void startStratumTask(void* pvParameters) {
   StartStratumParams* params = (StartStratumParams*) pvParameters;
 
-  startStratum(*params->worker, params->poolAddress, params->poolPort, params->suggestDifficulty);
+  startStratum(*params->worker, *params->monitor, params->poolAddress, params->poolPort, params->suggestDifficulty);
 }
 
 void startMinerTask(void* pvParameters) {
   StartMinerParams* params = (StartMinerParams*) pvParameters;
 
-  startMiner(*params->worker, params->miner_id);
+  startMiner(*params->worker, *params->monitor, params->miner_id);
+}
+
+void startMonitorTask(void* pvParameters) {
+  Monitor* monitor = (Monitor*) pvParameters;
+
+  startMonitor(*monitor);
 }

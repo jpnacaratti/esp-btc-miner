@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <ArduinoJson.h>
+#include <TFT_eSPI.h>
 
 #include "models/Worker.h"
 
@@ -24,5 +25,12 @@ void updateNonce(Miner& miner, uint32_t nonce);
 double le256todouble(const void *target);
 double diffFromTarget(void *target);
 void buildBlockHeader(Worker& worker);
+
+// Display methods
+uint16_t hexToRGB565(uint32_t hexColor);
+void updateText(TFT_eSprite &sprite, int x, int y, int rectWidth, int rectHeight, const char *newText, uint16_t textColor, uint16_t bgColor, const uint8_t *font, short orientation);
+void loadImage(TFT_eSprite &sprite, int x, int y, int rectWidth, int rectHeight, int imageWidth, int imageHeight, uint16_t bgColor, const unsigned short *image);
+String formatNumber(double number, bool useSuffix = true, bool cutLastZero = true);
+String formatUptime(unsigned long millis);
 
 #endif

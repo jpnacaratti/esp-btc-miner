@@ -12,11 +12,10 @@ typedef struct {
   String extranonce1;
   String extranonce2;
   String versionMask;
+  String lastJobId;
   int extranonceSize;
-  int templates;
   bool subscribed;
   double poolDifficulty;
-  double bestDiff;
 } Worker;
 
 #endif

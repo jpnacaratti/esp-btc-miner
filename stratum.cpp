@@ -140,10 +140,10 @@ bool stratumParseNotify(String& line, MineJob& job) {
   DeserializationError error = deserializeJson(doc, line);
   if (error || !doc.containsKey("params")) return false;
 
-  job.jobId = String(doc["params"][0]);
-  job.prevBlockHash = String(doc["params"][1]);
-  job.coinb1 = String(doc["params"][2]);
-  job.coinb2 = String(doc["params"][3]);
+  job.jobId = String(doc["params"][0].as<const char*>());
+  job.prevBlockHash = String(doc["params"][1].as<const char*>());
+  job.coinb1 = String(doc["params"][2].as<const char*>());
+  job.coinb2 = String(doc["params"][3].as<const char*>());
   
   // Saving merkle branch in a separated buffer to save pointer when the method ends
   JsonArray originalArray = doc["params"][4].as<JsonArray>();
@@ -152,9 +152,9 @@ bool stratumParseNotify(String& line, MineJob& job) {
     job.merkleBranch.add(v);
   }
 
-  job.version = String(doc["params"][5]);
-  job.nbits = String(doc["params"][6]);
-  job.ntime = String(doc["params"][7]);
+  job.version = String(doc["params"][5].as<const char*>());
+  job.nbits = String(doc["params"][6].as<const char*>());
+  job.ntime = String(doc["params"][7].as<const char*>());
 
   return true;
 }

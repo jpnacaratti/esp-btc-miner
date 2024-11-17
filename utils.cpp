@@ -6,6 +6,9 @@
 #include "utils.h"
 #include "models/Worker.h"
 
+// Display import
+#include <TFT_eSPI.h>
+
 bool verifyPayload(String* line){
   if (line->length() == 0) return false;
 
@@ -278,3 +281,91 @@ void buildBlockHeader(Worker& worker) {
   }
 }
 
+uint16_t hexToRGB565(uint32_t hexColor) {
+  uint8_t r = (hexColor >> 16) & 0xFF;
+  uint8_t g = (hexColor >> 8) & 0xFF;
+  uint8_t b = hexColor & 0xFF;
+  return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+}
+
+void updateText(TFT_eSprite &sprite, int x, int y, int rectWidth, int rectHeight, const char *newText, uint16_t textColor, uint16_t bgColor, const uint8_t *font, short orientation) {
+  sprite.setTextDatum(orientation);
+
+  sprite.loadFont(font);
+
+  if (orientation == TR_DATUM) {
+    sprite.fillRect(x - rectWidth, y - 2, rectWidth, rectHeight, bgColor);
+  } else {
+    sprite.fillRect(x, y - 2, rectWidth, rectHeight, bgColor);
+  }
+
+  sprite.setTextColor(textColor, bgColor);
+  sprite.drawString(newText, x, y);
+
+  sprite.pushSprite(0, 0);
+
+  sprite.unloadFont();
+}
+
+void loadImage(TFT_eSprite &sprite, int x, int y, int rectWidth, int rectHeight, int imageWidth, int imageHeight, uint16_t bgColor, const unsigned short *image) {
+  sprite.fillRect(x, y, rectWidth, rectHeight, bgColor);
+
+  sprite.pushImage(x, y, imageWidth, imageHeight, image);
+}
+
+String formatNumber(double number, bool useSuffix, bool cutLastZero) {
+  if (number == 0) return "";
+
+  String result;
+
+  if (number >= 1000000000) {
+    result = String(number / 1000000000.0, 2) + (useSuffix ? "B" : "");
+  } else if (number >= 1000000) {
+    result = String(number / 1000000.0, 2) + (useSuffix ? "M" : "");
+  } else if (number >= 1000) {
+    result = String(number / 1000.0, 2) + (useSuffix ? "K" : "");
+  } else if (number >= 1.0) {
+    result = String(number, 2);
+  } else { 
+    int decimalPlaces = 0;
+    double temp = number;
+
+    while (temp < 1.0 && decimalPlaces < 6) {
+      temp *= 10;
+      decimalPlaces++;
+    }
+
+    result = String(number, decimalPlaces + 1);
+  }
+
+  if (result.indexOf('.') > 0 && cutLastZero) {
+    while (result.endsWith("0")) {
+      result.remove(result.length() - 1);
+    }
+    if (result.endsWith(".")) {
+      result.remove(result.length() - 1);
+    }
+  }
+
+  return result;
+}
+
+String formatUptime(unsigned long millis) {
+  unsigned long seconds = millis / 1000;
+  unsigned long minutes = seconds / 60;
+  unsigned long hours = minutes / 60;
+  unsigned long days = hours / 24;
+
+  seconds = seconds % 60;
+  minutes = minutes % 60;
+  hours = hours % 24;
+
+  char buffer[20];
+  if (days < 10) {
+    snprintf(buffer, sizeof(buffer), "%1ldd  %02ld:%02ld:%02ld", days, hours, minutes, seconds);
+  } else {
+    snprintf(buffer, sizeof(buffer), "%2ldd %02ld:%02ld:%02ld", days, hours, minutes, seconds);
+  }
+
+  return String(buffer);
+}
