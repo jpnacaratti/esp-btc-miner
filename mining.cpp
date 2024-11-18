@@ -22,15 +22,16 @@
 #include "esp_system.h"
 #include "driver/adc.h"
 
-SemaphoreHandle_t xMutex = xSemaphoreCreateMutex();
-
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite sprite = TFT_eSprite(&tft);
 
 static WiFiClient client;
 unsigned long mLastCommunication = millis();
+unsigned long mLastSubmit = millis();
 
 uint32_t hashes = 0;
+
+float lastTemperature = 0;
 
 bool checkPoolConnection(Worker& worker, const char* pool_address, const uint16_t pool_port) {
 
@@ -74,9 +75,17 @@ void startStratum(Worker& worker, Monitor& monitor, const char* pool_address, co
 
   while (true) {
 
-    if (WiFi.status() != WL_CONNECTED) {
-      worker.subscribed = false;
+    if (lastTemperature >= 65.0) {
       stopMining(worker);
+      client.stop();
+      Serial.println("Too high temperature in chip, taking a breath...");
+      vTaskDelay(300000 / portTICK_PERIOD_MS);
+      continue;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+      stopMining(worker);
+      client.stop();
       WiFi.reconnect();
       vTaskDelay(5000 / portTICK_PERIOD_MS);
       continue;
@@ -108,9 +117,18 @@ void startStratum(Worker& worker, Monitor& monitor, const char* pool_address, co
 
       worker.subscribed = true;
       mLastCommunication = millis();
+      mLastSubmit = millis();
     }
 
     if (checkPoolInactivity(mLastCommunication, COMMUNICATION_SILENCE_LIMIT)) {
+
+      if (millis() - mLastSubmit > SUBMIT_SILENCE_LIMIT) {
+        stopMining(worker);
+        client.stop();
+        Serial.println("More than five minutes without sending shares, restarting...");
+        continue;
+      }
+
       Serial.println("Sending keep alive socket...");
       stratumSuggestDifficulty(client, suggestDifficulty);
       mLastCommunication = millis();
@@ -239,18 +257,21 @@ void startMiner(Worker& worker, Monitor& monitor, uint8_t miner_id) {
       if (difficulty > monitor.bestDiff) monitor.bestDiff = difficulty;
 
       if (difficulty >= worker.poolDifficulty) {
+        lastTemperature = temperatureRead();
+
         Serial.println("SHARE FOUND!");
         Serial.printf("-> Nonce: %u\n", nonce);
         Serial.printf("-> Miner who found: %u\n", miner_id);
         Serial.printf("-> Share difficulty: %.10f\n", difficulty);
         Serial.printf("-> Pool difficulty: %.4f\n", worker.poolDifficulty);
         Serial.printf("-> Best difficulty: %.4f\n", monitor.bestDiff);
-        Serial.printf("-> Temperatura do chip: %.2f°C\n", temperatureRead());
+        Serial.printf("-> Temperatura do chip: %.2f°C\n", lastTemperature);
 
         monitor.shares++;
 
         stratumSubmit(client, worker, nonce);
         mLastCommunication = millis();
+        mLastSubmit = millis();
       }
       
       // 32 bit share
@@ -325,7 +346,7 @@ void startMonitor(Monitor& monitor) {
       monitor.lastPoolConnected = newPoolStatus;
     }
 
-    String hr = formatNumber(monitor.hashes, false, false);
+    String hr = formatNumber(monitor.hashes / 2, false, false);
     if (!hr.equals(monitor.lastHashRate) && hr.length() == 5) { // WA - TODO: Remove later
       updateText(sprite, 19, 123, 115, 35, hr.c_str(), hrTextColor, hrBackground, POPPINS_40, TL_DATUM);
       monitor.lastHashRate = hr;
