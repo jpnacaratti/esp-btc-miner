@@ -1,4 +1,12 @@
 # ESP Bitcoin miner
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+![C++](https://img.shields.io/badge/C%2B%2B-ESP32-blue)
+![Arduino](https://img.shields.io/badge/Arduino-IDE-00979D?logo=arduino&logoColor=white)
+![ESP32](https://img.shields.io/badge/ESP32-T--Display%20S3-E7352C)
+![GitHub repo size](https://img.shields.io/github/repo-size/jpnacaratti/esp-btc-miner)
+![GitHub last commit](https://img.shields.io/github/last-commit/jpnacaratti/esp-btc-miner)
+
 Mine Bitcoin with a low-cost microcontroller by collaborating in a low-difficulty pool.
 
 This project’s main goal is to promote learning about how blockchains and the Bitcoin mining process work.
@@ -43,3 +51,9 @@ This project is designed for learning and experimentation. While real mining is 
 - [ ] Add compatibility with other pools
 - [ ] Compatibility for cases where the pool does not have a version mask
 - [ ] Increase the Hash rate to 80 Kh/s
+
+## License
+
+The original code in this project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+
+Third-party components retain their own licenses. In particular, `nerdSHA256plus` is based on [Blockstream Jade's `shaLib`](https://github.com/Blockstream/Jade), [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) is distributed under the FreeBSD license, and [ArduinoJson](https://github.com/bblanchon/ArduinoJson) is distributed under the MIT License.
